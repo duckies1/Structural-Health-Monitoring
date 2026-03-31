@@ -14,7 +14,12 @@ df["acc_mag"] = np.sqrt(
 
 df = df.sort_values("timestamp").reset_index(drop=True)
 
-# Color map
+# Smooth (VERY IMPORTANT)
+df["acc_mag_smooth"] = df["acc_mag"].rolling(1000).mean()
+
+# Create segments only when risk changes
+df["segment"] = (df["risk_level"] != df["risk_level"].shift()).cumsum()
+
 color_map = {
     "Healthy": "green",
     "Minor Risk": "yellow",
@@ -24,35 +29,24 @@ color_map = {
 
 fig = go.Figure()
 
-start = 0
+for _, segment in df.groupby("segment"):
+    risk = segment["risk_level"].iloc[0]
 
-for i in range(1, len(df)):
-    if df["risk_level"].iloc[i] != df["risk_level"].iloc[i-1]:
-        segment = df.iloc[start:i]
-
-        fig.add_trace(go.Scatter(
-            x=segment["timestamp"],
-            y=segment["acc_mag"],
-            mode="lines",
-            line=dict(color=color_map.get(df["risk_level"].iloc[i-1], "black"), width=2),
-            showlegend=False
-        ))
-
-        start = i
-
-# Last segment
-segment = df.iloc[start:]
-
-fig.add_trace(go.Scatter(
-    x=segment["timestamp"],
-    y=segment["acc_mag"],
-    mode="lines",
-    line=dict(color=color_map.get(df["risk_level"].iloc[-1], "black"), width=2),
-    showlegend=False
-))
+    fig.add_trace(go.Scatter(
+        x=segment["timestamp"],
+        y=segment["acc_mag_smooth"],
+        mode="lines",
+        line=dict(color=color_map.get(risk, "white"), width=3),
+        name=risk,
+        hovertemplate=(
+            "Time: %{x}<br>" +
+            "Acc: %{y:.3f}<br>" +
+            f"Risk: {risk}"
+        )
+    ))
 
 fig.update_layout(
-    title="Acceleration Magnitude Over Time (Risk Colored)",
+    title="Acceleration Magnitude Over Time (Clean Risk Visualization)",
     xaxis_title="Time",
     yaxis_title="Acceleration Magnitude",
     template="plotly_dark"
